@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import List, Union
 
 import operator as op
@@ -22,47 +24,57 @@ class FutureWrapper(Future):
     def __hash__(self):
         return Future.__hash__(self)
 
-    def __getitem__(self, item):
+    def __getitem__(self, item) -> FutureWrapper:
         client = get_client()
         new_fut = client.submit(op.getitem, self, item)
         return FutureWrapper.from_future(new_fut)
 
-    def __eq__(self, other):
+    def __ne__(self, other) -> FutureWrapper:
+        client = get_client()
+        new_fut = client.submit(op.ne, self, other)
+        return FutureWrapper.from_future(new_fut)
+
+    def __eq__(self, other) -> FutureWrapper:
         client = get_client()
         new_fut = client.submit(op.eq, self, other)
         return FutureWrapper.from_future(new_fut)
 
-    def __and__(self, other):
+    def __invert__(self) -> FutureWrapper:
+        client = get_client()
+        new_fut = client.submit(op.not_, self)
+        return FutureWrapper.from_future(new_fut)
+
+    def __and__(self, other) -> FutureWrapper:
         client = get_client()
         new_fut = client.submit(op.and_, self, other)
         return FutureWrapper.from_future(new_fut)
 
-    def __or__(self, other):
+    def __or__(self, other) -> FutureWrapper:
         client = get_client()
         new_fut = client.submit(op.or_, self, other)
         return FutureWrapper.from_future(new_fut)
 
-    def __xor__(self, other):
+    def __xor__(self, other) -> FutureWrapper:
         client = get_client()
         new_fut = client.submit(op.xor, self, other)
         return FutureWrapper.from_future(new_fut)
 
-    def __add__(self, other):
+    def __add__(self, other) -> FutureWrapper:
         client = get_client()
         new_fut = client.submit(op.add, self, other)
         return FutureWrapper.from_future(new_fut)
 
-    def __mul__(self, other):
+    def __mul__(self, other) -> FutureWrapper:
         client = get_client()
         new_fut = client.submit(op.mul, self, other)
         return FutureWrapper.from_future(new_fut)
 
-    def __sub__(self, other):
+    def __sub__(self, other) -> FutureWrapper:
         client = get_client()
         new_fut = client.submit(op.sub, self, other)
         return FutureWrapper.from_future(new_fut)
 
-    def __mod__(self, other):
+    def __mod__(self, other) -> FutureWrapper:
         client = get_client()
         new_fut = client.submit(op.mod, self, other)
         return FutureWrapper.from_future(new_fut)
