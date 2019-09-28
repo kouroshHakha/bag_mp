@@ -15,7 +15,7 @@ if __name__ == '__main__':
     job_futures = []
     sch_future = None
     for i in range(njobs):
-        specs = read_yaml(f'specs_gen/bag_mp/DTSA{i}.yaml')
+        specs = read_yaml(f'specs_gen/bag_mp/DTSA_sim/DTSA{i}.yaml')
         specs['impl_cell'] = f'{specs["impl_cell"]}_{i}'
         specs['impl_lib'] = f'{specs["impl_lib"]}_{i}'
         lvs_rcx_log = f.gen_cell(specs, dep=None, gen_lay=True, gen_sch=True, run_lvs=True,

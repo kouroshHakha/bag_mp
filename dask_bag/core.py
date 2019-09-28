@@ -48,18 +48,19 @@ class BagMP:
         io_cls.save(specs, tmp_file, **kwargs)
         return tmp_file, out_tmp_file
 
-    def get_log_fname(self, tmp_file):
+    @staticmethod
+    def get_log_fname(tmp_file):
         return tmp_file.parent / f'{tmp_file.stem}_log.log'
 
-    def run_script(self, script_path, tmp_file, output_path, format, args,
+    def run_script(self, script_path, tmp_file, output_path, io_format, args,
                    log_file=None):
         if self.interactive:
             cmd = ['./start_bag.sh', '-i', str(script_path), str(tmp_file)]
-            cmd += ['--dump', str(output_path), '--format', format]
+            cmd += ['--dump', str(output_path), '--format', io_format]
             cmd += args
         else:
             cmd = ['./run_bag.sh', str(script_path), str(tmp_file)]
-            cmd += ['--dump', str(output_path), '--format', format]
+            cmd += ['--dump', str(output_path), '--format', io_format]
             cmd += args
 
         open_mode = 'a'
@@ -140,6 +141,37 @@ class BagMP:
         else:
             return updated_log
 
+    def _meas_cell(self, specs, dep, gen_cell, gen_wrapper, gen_tb, load_results, extract,
+                   run_sim, log_file, bag_script, io_format, **kwargs):
+        io_cls = io_cls_dict[io_format]
+        tmp_file, out_tmp_file = self.resolve_specs(specs, io_format)
+        args = []
+        if not gen_cell:
+            args.append('--no-cell')
+        if not gen_wrapper:
+            args.append('--no-wrapper')
+        if not gen_tb:
+            args.append('--no-tb')
+        if load_results:
+            args.append('--load')
+        if extract:
+            args.append('-x')
+        if not run_sim:
+            args.append('--no-sim')
+
+        updated_log = self.run_script(meas_cell_scripts[bag_script],
+                                      tmp_file,
+                                      out_tmp_file,
+                                      io_format,
+                                      args,
+                                      log_file=log_file)
+
+        if load_results or run_sim:
+            # return meas results
+            return io_cls.load(out_tmp_file, **kwargs), updated_log
+        else:
+            return updated_log
+
     def gen_cell(self, specs, dep=None, gen_lay=False, gen_sch=False,
                  run_lvs=False, run_rcx=False, log_file=None,
                  bag_script='BAG2', io_format='yaml'):
@@ -160,8 +192,15 @@ class BagMP:
                             bag_script=bag_script, io_format=io_format)
         return FutureWrapper.from_future(fut)
 
-    def design_cell(self):
-        pass
+    def meas_cell(self, specs, dep=None, gen_cell=False, gen_wrapper=False,
+                  gen_tb=False, load_results=False, extract=True, run_sim=False, log_file=None,
+                  bag_script='BAG2', io_format='yaml'):
+        client = get_client()
+        fut = client.submit(self._meas_cell, specs, dep=dep, gen_cell=gen_cell,
+                            gen_wrapper=gen_wrapper, gen_tb=gen_tb, load_results=load_results,
+                            run_sim=run_sim, log_file=log_file, extract=extract,
+                            bag_script=bag_script, io_format=io_format)
+        return FutureWrapper.from_future(fut)
 
-    def meas_cell(self):
+    def design_cell(self):
         pass
