@@ -5,7 +5,7 @@ from dask.distributed import get_client
 from bag.io.file import Pickle, Yaml
 
 from bag.util.immutable import to_immutable
-from bag_mp.dask_bag.client_wrapper import FutureWrapper, create_client
+from bag_mp.src.bag_mp.client_wrapper import FutureWrapper, create_client
 
 PROCESS_TIMEOUT = 10000
 BAG2_FRAMEWORK = os.environ.get('BAG2_framework', 'BAG_framework')

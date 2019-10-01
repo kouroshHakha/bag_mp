@@ -1,3 +1,0 @@
-
-class MeasurementManager:
-    raise NotImplementedError

@@ -2,8 +2,8 @@ from typing import cast
 
 import time
 from bag.io import read_yaml
-from bag_mp.dask_bag.core import BagMP
-from bag_mp.dask_bag.client_wrapper import (
+from bag_mp.src.bag_mp.core import BagMP
+from bag_mp.src.bag_mp.client_wrapper import (
     synchronize, get_results, FutureWrapper
 )
 
