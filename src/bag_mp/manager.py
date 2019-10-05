@@ -26,17 +26,31 @@ class EvalTemplate:
 
 
 class EvaluationManager(abc.ABC):
-    def __init__(self, temp_fname):
+    def __init__(self, temp_fname, *args, **kwargs):
         self.template = self._get_template(temp_fname)
-        self.prj = BagMP()
+        # the project object used for running minimum executable tasks
+        interactive = kwargs.pop('interactive', False)
+        verbose = kwargs.pop('verbose', False)
+        self.prj = BagMP(interactive=interactive, verbose=verbose)
 
     @staticmethod
-    def get_results(results) -> Any:
-        return get_results(results, errors='skip')
+    def get_results(results: List[FutureWrapper]) -> Any:
+        synchronize(results)
+        cleared_results = []
+        for job_res in results:
+            try:
+                res = job_res.result()
+                cleared_results.append(res)
+            except SystemError:
+                cleared_results.append(SystemError)
+        return cleared_results
 
     @staticmethod
     def sync(results: Union[List[FutureWrapper], FutureWrapper]) -> Any:
         return synchronize(results)
+
+    def render(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        return self.template.render_yaml(params)
 
     @staticmethod
     def _get_template(fname: os.PathLike) -> EvalTemplate:

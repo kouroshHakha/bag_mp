@@ -1,3 +1,5 @@
+from typing import Dict, Any, Callable
+
 import os
 from pathlib import Path
 import subprocess
@@ -34,7 +36,12 @@ io_cls_dict = {
 
 class BagMP:
     def __init__(self, interactive=False, verbose=False, **kwargs) -> None:
-        create_client(**kwargs)
+        try:
+            get_client()
+            print('client loaded')
+        except ValueError:
+            create_client(**kwargs)
+            print('client created')
         self.bag_tmp_dir = os.environ.get('BAG_TEMP_DIR', None)
         self.interactive = interactive
         self.verbose = verbose
@@ -101,12 +108,12 @@ class BagMP:
                                       args,
                                       log_file=log_file)
 
-        if run_lvs or run_rcx:
-            # return log in case of failiure
-            log = io_cls.load(out_tmp_file, **kwargs).get('log', '')
-            if log:
-                raise ValueError(f'lvs/rcx failed, log: {log}')
-        elif gen_sch or gen_lay:
+        # if run_lvs or run_rcx:
+        #     # return log in case of failiure
+        #     log = io_cls.load(out_tmp_file, **kwargs).get('log', '')
+        #     if log:
+        #         raise ValueError(f'lvs/rcx failed, log: {log}')
+        if gen_sch or gen_lay:
             # return sch_params
             return io_cls.load(out_tmp_file, **kwargs), updated_log
 
@@ -185,6 +192,41 @@ class BagMP:
     def sim_cell(self, specs, dep=None, gen_cell=False, gen_wrapper=False,
                  gen_tb=False, load_results=False, extract=True, run_sim=False, log_file=None,
                  bag_script='BAG2', io_format='yaml'):
+        """
+        submits a simulation job to the queue of workers
+        Parameters
+        ----------
+        specs: Dict[str, Any]
+            specification dictionary
+        dep: Any
+            A dummy variable for specifying explicit dependencies. If during submission of a new
+            job, it depends on the termination of another job, but explicit returned value from
+            the former job, setting this variable can be useful.
+        gen_cell: bool
+            True to generate cell, default behavior does not generate cell.
+        gen_wrapper: bool
+            True to generate wrapper, default behavior does not generate wrapper.
+        gen_tb: bool
+            True to generate test bench, default behavior does not generate test bench.
+        load_results: bool
+            True to load the results and skip generation/simulation even when they are True.
+        extract: bool
+            False run schematic sims if simulation is True, default runs post-layout
+            simulation.
+        run_sim: bool
+            True to run simulations, default behavior does not run simulation.
+        log_file: bool
+            The location of the log file, this is useful when you want a partial part of the
+            graph to dump their log to the same place.
+        bag_script:
+            Look at the key words in sim_cell_scripts. Those are the valid key words.
+        io_format
+            Yaml or pickle. It determines the interface format to external jobs.
+        Returns
+        -------
+        FutureWrapper[Tuple[Any, Path]]
+        The results of the simulation as well as the log file.
+        """
         client = get_client()
         fut = client.submit(self._sim_cell, specs, dep=dep, gen_cell=gen_cell,
                             gen_wrapper=gen_wrapper,  gen_tb=gen_tb, load_results=load_results,
@@ -204,3 +246,26 @@ class BagMP:
 
     def design_cell(self):
         pass
+
+    @staticmethod
+    def submit(func: Callable, *args, **kwargs) -> FutureWrapper:
+        """
+        Convenience function to submit arbitrary jobs to the client
+        Parameters
+        ----------
+        func: Callable
+            The function has to be serializable
+        args:
+            optional arg list, could be FutureWrappers or any other serializable object
+        kwargs:
+            optional keyword argument list, could be FutureWrappers or any other serializable object
+
+        args and kwargs are parameters of the callable
+
+        Returns
+        -------
+        results of the job as FutureWrapper objects
+        """
+        client = get_client()
+        fut = client.submit(func, *args, **kwargs)
+        return FutureWrapper.from_future(fut)
