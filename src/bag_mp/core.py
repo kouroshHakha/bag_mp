@@ -4,9 +4,10 @@ import os
 from pathlib import Path
 import subprocess
 from dask.distributed import get_client
-from bag.io.file import Pickle, Yaml
 
-from bag.util.immutable import to_immutable
+from .file import Pickle, Yaml
+from .immutable import to_immutable
+
 from bag_mp.src.bag_mp.client_wrapper import FutureWrapper, create_client
 
 PROCESS_TIMEOUT = 10000
@@ -37,11 +38,11 @@ io_cls_dict = {
 class BagMP:
     def __init__(self, interactive=False, verbose=False, **kwargs) -> None:
         try:
-            get_client()
-            print('client loaded')
+            client = get_client()
+            print(f'client loaded: {client}')
         except ValueError:
             create_client(**kwargs)
-            print('client created')
+            print(f'client created: {get_client()}')
         self.bag_tmp_dir = os.environ.get('BAG_TEMP_DIR', None)
         self.interactive = interactive
         self.verbose = verbose
@@ -75,6 +76,7 @@ class BagMP:
             log_file = self.get_log_fname(tmp_file)
             open_mode = 'w'
         with open(log_file, open_mode) as log_f:
+            print(f'[running] {" ".join(cmd)}')
             if self.verbose:
                 exit_code = subprocess.call(cmd, timeout=PROCESS_TIMEOUT)
             else:
@@ -108,11 +110,6 @@ class BagMP:
                                       args,
                                       log_file=log_file)
 
-        # if run_lvs or run_rcx:
-        #     # return log in case of failiure
-        #     log = io_cls.load(out_tmp_file, **kwargs).get('log', '')
-        #     if log:
-        #         raise ValueError(f'lvs/rcx failed, log: {log}')
         if gen_sch or gen_lay:
             # return sch_params
             return io_cls.load(out_tmp_file, **kwargs), updated_log
@@ -221,7 +218,7 @@ class BagMP:
         bag_script:
             Look at the key words in sim_cell_scripts. Those are the valid key words.
         io_format
-            Yaml or pickle. It determines the interface format to external jobs.
+            yaml or pickle. It determines the interface format to external jobs.
         Returns
         -------
         FutureWrapper[Tuple[Any, Path]]

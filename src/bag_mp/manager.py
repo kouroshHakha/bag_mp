@@ -21,7 +21,7 @@ class EvalTemplate:
 
     def render_yaml(self, params: Dict[str, Any]) -> Dict[str, Any]:
         yaml_content = self.render_plain(params)
-        specs = yaml.load(yaml_content, Loader=yaml.FullLoader)
+        specs = yaml.load(yaml_content, Loader=yaml.Loader)
         return specs
 
 
@@ -31,7 +31,8 @@ class EvaluationManager(abc.ABC):
         # the project object used for running minimum executable tasks
         interactive = kwargs.pop('interactive', False)
         verbose = kwargs.pop('verbose', False)
-        self.prj = BagMP(interactive=interactive, verbose=verbose)
+        processes = kwargs.pop('processes', False)
+        self.prj = BagMP(interactive=interactive, verbose=verbose, processes=processes)
 
     @staticmethod
     def get_results(results: List[FutureWrapper]) -> Any:
