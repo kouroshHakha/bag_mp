@@ -11,8 +11,13 @@ from .immutable import to_immutable
 from bag_mp.src.bag_mp.client_wrapper import FutureWrapper, create_client
 
 PROCESS_TIMEOUT = 10000
-BAG2_FRAMEWORK = os.environ.get('BAG2_framework', 'BAG_framework')
-BAG3_FRAMEWORK = os.environ.get('BAG3_framework', 'BAG_framework')
+BAG2_FRAMEWORK = os.environ.get('BAG2_FRAMEWORK', 'BAG_framework')
+BAG3_FRAMEWORK = os.environ.get('BAG3_FRAMEWORK', 'BAG_framework')
+
+framework_dict = {
+    'BAG2': Path(BAG2_FRAMEWORK),
+    'BAG3': Path(BAG3_FRAMEWORK),
+}
 
 gen_cell_scripts = {
     'BAG2': Path(BAG2_FRAMEWORK) / 'run_scripts' / 'gen_cell.py',
@@ -60,8 +65,14 @@ class BagMP:
     def get_log_fname(tmp_file):
         return tmp_file.parent / f'{tmp_file.stem}_log.log'
 
-    def run_script(self, script_path, tmp_file, output_path, io_format, args,
+    @staticmethod
+    def _get_bag_work_dir(bag_script: str) -> str:
+        framework_dir = Path(framework_dict[bag_script])
+        return str(framework_dir.parent)
+
+    def run_script(self, script_path, tmp_file, output_path, io_format, args, cwd,
                    log_file=None):
+        cwd = Path(cwd).resolve()
         if self.interactive:
             cmd = ['./start_bag.sh', '-i', str(script_path), str(tmp_file)]
             cmd += ['--dump', str(output_path), '--format', io_format]
@@ -78,10 +89,10 @@ class BagMP:
         with open(log_file, open_mode) as log_f:
             print(f'[running] {" ".join(cmd)}')
             if self.verbose:
-                exit_code = subprocess.call(cmd, timeout=PROCESS_TIMEOUT)
+                exit_code = subprocess.call(cmd, timeout=PROCESS_TIMEOUT, cwd=cwd)
             else:
                 exit_code = subprocess.call(cmd, stdout=log_f, stderr=log_f,
-                                            timeout=PROCESS_TIMEOUT)
+                                            timeout=PROCESS_TIMEOUT, cwd=cwd)
         if exit_code != 0:
             print(f'[failure] {" ".join(cmd)}')
             print(f'log: {log_file}')
@@ -103,11 +114,14 @@ class BagMP:
             args.append('-v')
         if run_rcx:
             args.append('-x')
+
+        cwd = self._get_bag_work_dir(bag_script)
         updated_log = self.run_script(gen_cell_scripts[bag_script],
                                       tmp_file,
                                       out_tmp_file,
                                       io_format,
                                       args,
+                                      cwd,
                                       log_file=log_file)
 
         if gen_sch or gen_lay:
@@ -132,11 +146,13 @@ class BagMP:
         if not run_sim:
             args.append('--no-sim')
 
+        cwd = self._get_bag_work_dir(bag_script)
         updated_log = self.run_script(sim_cell_scripts[bag_script],
                                       tmp_file,
                                       out_tmp_file,
                                       io_format,
                                       args,
+                                      cwd,
                                       log_file=log_file)
 
         if load_results or run_sim:
@@ -163,11 +179,13 @@ class BagMP:
         if not run_sim:
             args.append('--no-sim')
 
+        cwd = self._get_bag_work_dir(bag_script)
         updated_log = self.run_script(meas_cell_scripts[bag_script],
                                       tmp_file,
                                       out_tmp_file,
                                       io_format,
                                       args,
+                                      cwd,
                                       log_file=log_file)
 
         if load_results or run_sim:
