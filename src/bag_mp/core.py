@@ -13,25 +13,36 @@ from bag_mp.src.bag_mp.client_wrapper import FutureWrapper, create_client
 PROCESS_TIMEOUT = 10000
 BAG2_FRAMEWORK = os.environ.get('BAG2_FRAMEWORK', 'BAG_framework')
 BAG3_FRAMEWORK = os.environ.get('BAG3_FRAMEWORK', 'BAG_framework')
+BAG2_WORK_DIR = Path(BAG2_FRAMEWORK).parent
+BAG3_WORK_DIR = Path(BAG3_FRAMEWORK).parent
 
-framework_dict = {
-    'BAG2': Path(BAG2_FRAMEWORK),
-    'BAG3': Path(BAG3_FRAMEWORK),
-}
-
-gen_cell_scripts = {
-    'BAG2': Path(BAG2_FRAMEWORK) / 'run_scripts' / 'gen_cell.py',
-    'BAG3': Path(BAG3_FRAMEWORK) / 'run_scripts' / 'gen_cell.py',
-}
-
-sim_cell_scripts = {
-    'BAG2': Path(BAG2_FRAMEWORK) / 'run_scripts' / 'sim_cell.py',
-    'BAG3': Path(BAG3_FRAMEWORK) / 'run_scripts' / 'sim_cell.py',
-}
-
-meas_cell_scripts = {
-    'BAG2': Path(BAG2_FRAMEWORK) / 'run_scripts' / 'meas_cell.py',
-    'BAG3': Path(BAG3_FRAMEWORK) / 'run_scripts' / 'meas_cell.py',
+config_dict = {
+    'BAG2': {
+        'work_dir': BAG2_WORK_DIR,
+        'env_vars': Path(BAG2_FRAMEWORK).parent / '.cshrc',
+        'framework': Path(BAG2_FRAMEWORK),
+        'gen_cell': Path(BAG2_FRAMEWORK) / 'run_scripts' / 'gen_cell.py',
+        'sim_cell': Path(BAG2_FRAMEWORK) / 'run_scripts' / 'sim_cell.py',
+        'meas_cell': Path(BAG2_FRAMEWORK) / 'run_scripts' / 'meas_cell.py',
+        'envs': {
+            'BAG_WORK_DIR': BAG2_WORK_DIR,
+            'BAG_TECH_CONFIG_DIR': BAG2_WORK_DIR/'GF14LPP',
+            'BAG_CONFIG_PATH': BAG2_WORK_DIR/'bag_config.yaml',
+        }
+    },
+    'BAG3': {
+        'work_dir': Path(BAG3_FRAMEWORK).parent,
+        'env_vars': Path(BAG3_FRAMEWORK).parent / '.cshrc',
+        'framework': Path(BAG3_FRAMEWORK),
+        'gen_cell': Path(BAG3_FRAMEWORK) / 'run_scripts' / 'gen_cell.py',
+        'sim_cell': Path(BAG3_FRAMEWORK) / 'run_scripts' / 'sim_cell.py',
+        'meas_cell': Path(BAG3_FRAMEWORK) / 'run_scripts' / 'meas_cell.py',
+        'envs': {
+            'BAG_WORK_DIR': BAG3_WORK_DIR,
+            'BAG_TECH_CONFIG_DIR': BAG3_WORK_DIR / 'GF14LPP',
+            'BAG_CONFIG_PATH': BAG3_WORK_DIR / 'bag_config.yaml',
+        }
+    }
 }
 
 io_cls_dict = {
@@ -65,12 +76,7 @@ class BagMP:
     def get_log_fname(tmp_file):
         return tmp_file.parent / f'{tmp_file.stem}_log.log'
 
-    @staticmethod
-    def _get_bag_work_dir(bag_script: str) -> str:
-        framework_dir = Path(framework_dict[bag_script])
-        return str(framework_dir.parent)
-
-    def run_script(self, script_path, tmp_file, output_path, io_format, args, cwd,
+    def run_script(self, script_path, tmp_file, output_path, io_format, args, cwd, env,
                    log_file=None):
         cwd = Path(cwd).resolve()
         if self.interactive:
@@ -89,10 +95,10 @@ class BagMP:
         with open(log_file, open_mode) as log_f:
             print(f'[running] {" ".join(cmd)}')
             if self.verbose:
-                exit_code = subprocess.call(cmd, timeout=PROCESS_TIMEOUT, cwd=cwd)
+                exit_code = subprocess.call(cmd, timeout=PROCESS_TIMEOUT, cwd=cwd, env=env)
             else:
                 exit_code = subprocess.call(cmd, stdout=log_f, stderr=log_f,
-                                            timeout=PROCESS_TIMEOUT, cwd=cwd)
+                                            timeout=PROCESS_TIMEOUT, cwd=cwd, env=env)
         if exit_code != 0:
             print(f'[failure] {" ".join(cmd)}')
             print(f'log: {log_file}')
@@ -101,8 +107,13 @@ class BagMP:
             print(f'[success] {" ".join(cmd)}')
         return log_file
 
+    def _get_env_vars(self, updated_envs: Dict[str, str]):
+        envs = os.environ.copy()
+        envs.update(updated_envs)
+        return envs
+
     def _gen_cell(self, specs, dep, gen_lay, gen_sch, run_lvs, run_rcx,
-                  log_file, bag_script, io_format, **kwargs):
+                  log_file, bag_id, io_format, **kwargs):
         io_cls = io_cls_dict[io_format]
         tmp_file, out_tmp_file = self.resolve_specs(specs, io_format)
         args = []
@@ -115,13 +126,16 @@ class BagMP:
         if run_rcx:
             args.append('-x')
 
-        cwd = self._get_bag_work_dir(bag_script)
-        updated_log = self.run_script(gen_cell_scripts[bag_script],
+        bag_config = config_dict[bag_id]
+        cwd = bag_config['work_dir']
+        envs = self._get_env_vars(bag_config['envs'])
+        updated_log = self.run_script(bag_config['gen_cell'],
                                       tmp_file,
                                       out_tmp_file,
                                       io_format,
                                       args,
                                       cwd,
+                                      env=envs,
                                       log_file=log_file)
 
         if gen_sch or gen_lay:
@@ -129,7 +143,7 @@ class BagMP:
             return io_cls.load(out_tmp_file, **kwargs), updated_log
 
     def _sim_cell(self, specs, dep, gen_cell, gen_wrapper, gen_tb, load_results, extract,
-                  run_sim, log_file, bag_script, io_format, **kwargs):
+                  run_sim, log_file, bag_id, io_format, **kwargs):
         io_cls = io_cls_dict[io_format]
         tmp_file, out_tmp_file = self.resolve_specs(specs, io_format)
         args = []
@@ -146,13 +160,16 @@ class BagMP:
         if not run_sim:
             args.append('--no-sim')
 
-        cwd = self._get_bag_work_dir(bag_script)
-        updated_log = self.run_script(sim_cell_scripts[bag_script],
+        bag_config = config_dict[bag_id]
+        cwd = bag_config['work_dir']
+        envs = self._get_env_vars(bag_config['envs'])
+        updated_log = self.run_script(bag_config['sim_cell'],
                                       tmp_file,
                                       out_tmp_file,
                                       io_format,
                                       args,
                                       cwd,
+                                      env=envs,
                                       log_file=log_file)
 
         if load_results or run_sim:
@@ -162,7 +179,7 @@ class BagMP:
             return updated_log
 
     def _meas_cell(self, specs, dep, gen_cell, gen_wrapper, gen_tb, load_results, extract,
-                   run_sim, log_file, bag_script, io_format, **kwargs):
+                   run_sim, log_file, bag_id, io_format, **kwargs):
         io_cls = io_cls_dict[io_format]
         tmp_file, out_tmp_file = self.resolve_specs(specs, io_format)
         args = []
@@ -179,13 +196,16 @@ class BagMP:
         if not run_sim:
             args.append('--no-sim')
 
-        cwd = self._get_bag_work_dir(bag_script)
-        updated_log = self.run_script(meas_cell_scripts[bag_script],
+        bag_config = config_dict[bag_id]
+        cwd = bag_config['work_dir']
+        envs = self._get_env_vars(bag_config['envs'])
+        updated_log = self.run_script(bag_config['meas_cell'],
                                       tmp_file,
                                       out_tmp_file,
                                       io_format,
                                       args,
                                       cwd,
+                                      env=envs,
                                       log_file=log_file)
 
         if load_results or run_sim:
@@ -196,17 +216,17 @@ class BagMP:
 
     def gen_cell(self, specs, dep=None, gen_lay=False, gen_sch=False,
                  run_lvs=False, run_rcx=False, log_file=None,
-                 bag_script='BAG2', io_format='yaml'):
+                 bag_id='BAG2', io_format='yaml'):
         client = get_client()
         fut = client.submit(self._gen_cell, specs, dep=dep, gen_lay=gen_lay,
                             gen_sch=gen_sch, run_lvs=run_lvs, run_rcx=run_rcx,
-                            log_file=log_file, bag_script=bag_script,
+                            log_file=log_file, bag_id=bag_id,
                             io_format=io_format)
         return FutureWrapper.from_future(fut)
 
     def sim_cell(self, specs, dep=None, gen_cell=False, gen_wrapper=False,
                  gen_tb=False, load_results=False, extract=True, run_sim=False, log_file=None,
-                 bag_script='BAG2', io_format='yaml'):
+                 bag_id='BAG2', io_format='yaml'):
         """
         submits a simulation job to the queue of workers
         Parameters
@@ -233,7 +253,7 @@ class BagMP:
         log_file: bool
             The location of the log file, this is useful when you want a partial part of the
             graph to dump their log to the same place.
-        bag_script:
+        bag_id:
             Look at the key words in sim_cell_scripts. Those are the valid key words.
         io_format
             yaml or pickle. It determines the interface format to external jobs.
@@ -246,17 +266,17 @@ class BagMP:
         fut = client.submit(self._sim_cell, specs, dep=dep, gen_cell=gen_cell,
                             gen_wrapper=gen_wrapper,  gen_tb=gen_tb, load_results=load_results,
                             run_sim=run_sim, log_file=log_file, extract=extract,
-                            bag_script=bag_script, io_format=io_format)
+                            bag_id=bag_id, io_format=io_format)
         return FutureWrapper.from_future(fut)
 
     def meas_cell(self, specs, dep=None, gen_cell=False, gen_wrapper=False,
                   gen_tb=False, load_results=False, extract=True, run_sim=False, log_file=None,
-                  bag_script='BAG2', io_format='yaml'):
+                  bag_id='BAG2', io_format='yaml'):
         client = get_client()
         fut = client.submit(self._meas_cell, specs, dep=dep, gen_cell=gen_cell,
                             gen_wrapper=gen_wrapper, gen_tb=gen_tb, load_results=load_results,
                             run_sim=run_sim, log_file=log_file, extract=extract,
-                            bag_script=bag_script, io_format=io_format)
+                            bag_id=bag_id, io_format=io_format)
         return FutureWrapper.from_future(fut)
 
     def design_cell(self):
