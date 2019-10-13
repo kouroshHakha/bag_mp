@@ -25,7 +25,7 @@ class EvalTemplate:
         return specs
 
 
-class EvaluationManager(abc.ABC):
+class FlowManager(abc.ABC):
     def __init__(self, temp_fname, *args, **kwargs):
         self.template = self._get_template(temp_fname)
         # the project object used for running minimum executable tasks
